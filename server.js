@@ -1,58 +1,76 @@
-var express         = require('express');
-var graphqlHTTP     = require('express-graphql');
-var { buildSchema } = require('graphql');
+var express         = require('express')
+var graphqlHTTP     = require('express-graphql')
+var { buildSchema } = require('graphql')
 
-
-// Schema
+// Schema Construct
 var schema = buildSchema(`
-type RandomDie {
-numSides: Int!
-rollOnce: Int!
-roll(numRolls: Int!): [Int]
+
+input MessageInput{
+content: String
+author: String
+}
+
+type Message {
+id: ID!
+content: String
+author: String
 }
 
 type Query {
-getDie(numSides: Int): RandomDie
+getMessage(id: ID!): Message
 }
-`)
 
-// Random Die
-class RandomDie {
+type Mutation {
+createMessage(input: MessageInput): Message
+updateMessage(id: ID!, input: MessageInput): Message
 
-  // Class constructor
-  constructor (numSides) {
-    this.numSides = numSides;
+}
+`);
+
+class Message{
+  constructor(id, {content, author}) {
+    this.id      = id;
+    this.content = content;
+    this.author  = author;
   }
+}
 
-  // Roll dice once
-  rollOnce(){
-    return 1 + Math.floor(Math.random() * this.numSides);
-  }
+var fakeDatabase = {};
 
-  // Roll dice multiple times
-  roll({numRolls}){
-    var output = [];
-    for(var i = 0; i < numRolls; i ++){
-      output.push(this.rollOnce());
-    }
-    return output;
-  }
-};
-
-
-// Root
 var root = {
-  getDie: function({numSides}){
-    return new RandomDie(numSides || 6);
-  }
-};
 
-// Server
+  // Get Message
+  getMessage: function({id}){
+    if(!fakeDatabase[id]){
+      throw new Error('No message exists with id: ' + id);
+    }
+    return new Message(id, fakeDatabase[id])
+  },
+
+  // Create Message
+  createMessage: function({input}){
+    var id           = require('crypto').randomBytes(10).toString('hex')
+    fakeDatabase[id] = input
+    return new Message(id, input)
+  },
+
+  // Update Message
+  updateMessage: function({id, input}){
+    if(!fakeDatabase[id]){
+      throw new Error('No message exists with id: ' + id);
+    }
+    fakeDatabase[id] = input;
+    return new Message(id, input);
+  }
+}
+
+// Mount server
 var app = express();
 app.use('/graphql', graphqlHTTP({
   schema: schema,
   rootValue: root,
   graphiql: true,
 }));
-app.listen(4000);
-console.log('Running a GraphQL API server at localhost:4000/graphql');
+app.listen(4000, () => {
+  console.log('Running a GraphQL API server at localhost:4000/graphql');
+});
